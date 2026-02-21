@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { RECIPES, type Recipe } from "@/lib/recipes";
 import Link from "next/link";
 import { loadFavoriteIds, saveFavoriteIds, toggleFavoriteId } from "@/lib/favorites";
+import { useSearchParams } from "next/navigation";
 
 function pickRandom<T>(arr: T[], exclude?: T) {
   if (arr.length === 0) throw new Error("empty array");
@@ -46,6 +47,8 @@ function clsx(...xs: Array<string | false | undefined | null>) {
 }
 
 export default function Home() {
+  const searchParams = useSearchParams();
+  const requestedId = searchParams.get("id");
   const all = useMemo(() => RECIPES, []);
   const [regionFilter, setRegionFilter] = useState<Recipe["region"] | "All">("All");
 
@@ -64,8 +67,17 @@ useEffect(() => {
   return () => window.clearTimeout(t);
 }, [toast]);
   // --- Favorites (localStorage) ---
-const FAV_KEY = "taste-daily:favorites:v1";
 const [favorites, setFavorites] = useState<string[]>([]);
+
+useEffect(() => {
+  if (!requestedId) return;
+
+  const found = all.find((r) => r.id === requestedId);
+  if (found) {
+    setRecipe(found);
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [requestedId]);
 
 useEffect(() => {
   setFavorites(loadFavoriteIds());
@@ -87,9 +99,12 @@ const toggleFavorite = () => {
 };
 
   useEffect(() => {
-    setRecipe((prev) => pickRandom(filtered, prev));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // /?id=xxx で来たときはランダム化しない（指定レシピを優先）
+  if (requestedId) return;
+
+  setRecipe((prev) => pickRandom(filtered, prev));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [requestedId]);
 
   const refreshWithinFilter = (nextRegion: typeof regionFilter) => {
     setRegionFilter(nextRegion);
