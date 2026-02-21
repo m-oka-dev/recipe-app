@@ -104,10 +104,7 @@ export default function Home() {
         {/* Header */}
         <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
           <div>
-            <div className={clsx("inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs", C.border, C.chip)}>
-              <span className="h-1.5 w-1.5 rounded-full bg-[#cfa77a]" />
-              Cafe Recipe Roulette
-            </div>
+            
             <h1 className="mt-3 text-3xl font-semibold tracking-tight md:text-4xl">
               世界の料理ルーレット <span className={C.muted}>☕</span>
             </h1>
@@ -173,7 +170,7 @@ export default function Home() {
                   loading="lazy"
                 />
                 {/* cafe overlay */}
-                <div className="absolute inset-0 bg-gradient-to-t from-[#3b2f2f]/70 via-[#3b2f2f]/20 to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#3b2f2f]/90 via-[#3b2f2f]/45 to-transparent lg:from-[#3b2f2f]/70 lg:via-[#3b2f2f]/20" />
                 <div className="absolute bottom-0 left-0 right-0 p-5">
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="text-2xl font-semibold tracking-tight md:text-3xl text-white">
@@ -209,15 +206,11 @@ export default function Home() {
 
               {/* Footer mini actions */}
               <div className={clsx("flex flex-wrap items-center gap-3 border-t p-4", C.border)}>
-                <button onClick={nextRecipe} className={clsx("rounded-xl px-4 py-2 text-sm font-medium shadow-sm transition", C.btn)}>
-                  シャッフル
+                <button onClick={nextRecipe} className={clsx("w-full sm:w-auto rounded-xl px-5 py-3 text-sm font-medium shadow-sm transition", C.btn)}>
+                  次のレシピ
                 </button>
-                <button
-                  onClick={() => refreshWithinFilter(regionFilter)}
-                  className={clsx("rounded-xl border px-4 py-2 text-sm transition", C.btnGhost)}
-                >
-                  同じ条件でもう一回
-                </button>
+                
+                
                 <div className={clsx("ml-auto text-xs", C.muted)}>{filtered.length} recipes</div>
               </div>
             </div>
