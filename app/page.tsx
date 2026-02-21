@@ -3,8 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { RECIPES, type Recipe } from "@/lib/recipes";
 
-
-
 function pickRandom<T>(arr: T[], exclude?: T) {
   if (arr.length === 0) throw new Error("empty array");
   if (arr.length === 1) return arr[0];
@@ -41,19 +39,27 @@ function difficultyLabel(d: Recipe["difficulty"]) {
   }
 }
 
+function clsx(...xs: Array<string | false | undefined | null>) {
+  return xs.filter(Boolean).join(" ");
+}
+
 export default function Home() {
   const all = useMemo(() => RECIPES, []);
   const [regionFilter, setRegionFilter] = useState<Recipe["region"] | "All">("All");
+
   const filtered = useMemo(
     () => (regionFilter === "All" ? all : all.filter((r) => r.region === regionFilter)),
     [all, regionFilter]
   );
 
+  // SSR安定 → 初回だけクライアントでランダム化
   const [recipe, setRecipe] = useState<Recipe>(() => filtered[0] ?? all[0]);
+  const [isShuffling, setIsShuffling] = useState(false);
+
   useEffect(() => {
-  setRecipe((prev) => pickRandom(filtered, prev));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, []);
+    setRecipe((prev) => pickRandom(filtered, prev));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const refreshWithinFilter = (nextRegion: typeof regionFilter) => {
     setRegionFilter(nextRegion);
@@ -61,61 +67,192 @@ export default function Home() {
     setRecipe((prev) => pickRandom(nextList, prev));
   };
 
+  const nextRecipe = () => {
+    setIsShuffling(true);
+    window.setTimeout(() => {
+      setRecipe((prev) => pickRandom(filtered, prev));
+      setIsShuffling(false);
+    }, 140);
+  };
+
+  const copyText = async () => {
+    const text =
+      `${recipe.name}（${recipe.country}）\n` +
+      `地域: ${regionLabel(recipe.region)} / 時間: 約${recipe.timeMin}分 / 難易度: ${difficultyLabel(
+        recipe.difficulty
+      )}\n\n` +
+      `【材料】\n- ${recipe.ingredients.join("\n- ")}\n\n` +
+      `【手順】\n1. ${recipe.steps.join("\n1. ")}`;
+    await navigator.clipboard.writeText(text);
+  };
+
+  // カフェ配色（1箇所でまとめ管理）
+  const C = {
+    bg: "bg-[#f6f1ea]",
+    text: "text-[#3b2f2f]",
+    muted: "text-[#7a6a5d]",
+    border: "border-[#eadfd4]",
+    card: "bg-white",
+    chip: "bg-[#f2e8de] text-[#4b3a34] border-[#eadfd4]",
+    btn: "bg-[#6b4f4f] hover:bg-[#5a3f3f] text-white",
+    btnGhost: "bg-white hover:bg-[#faf6f1] text-[#4b3a34] border-[#eadfd4]",
+  };
+
   return (
-    <main className="min-h-screen bg-zinc-950 text-white">
-      <div className="mx-auto max-w-4xl px-6 py-10">
-        <h1 className="text-3xl font-bold mb-6">世界の料理ルーレット 🍽️</h1>
-
-        <select
-          value={regionFilter}
-          onChange={(e) => refreshWithinFilter(e.target.value as any)}
-          className="mb-6 p-2 rounded bg-zinc-800"
-        >
-          <option value="All">すべて</option>
-          <option value="Asia">アジア</option>
-          <option value="Europe">ヨーロッパ</option>
-          <option value="Americas">南北アメリカ</option>
-        </select>
-
-        <div className="bg-zinc-900 p-6 rounded-xl shadow">
-          <div className="mt-4 overflow-hidden rounded-xl border border-zinc-800">
-        <img
-          src={recipe.imageUrl}
-          alt={recipe.name}
-          className="h-56 w-full object-cover"
-          loading="lazy"
-  />
-</div>
-          <h2 className="text-2xl font-semibold">
-            {recipe.name}（{recipe.country}）
-          </h2>
-
-          <p className="mt-3 text-zinc-300">{recipe.description}</p>
-
-          <div className="mt-4 text-sm text-zinc-400">
-            ⏱ {recipe.timeMin}分 / {difficultyLabel(recipe.difficulty)}
+    <main className={clsx("min-h-screen", C.bg, C.text)}>
+      <div className="mx-auto max-w-6xl px-6 py-12">
+        {/* Header */}
+        <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
+          <div>
+            <div className={clsx("inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs", C.border, C.chip)}>
+              <span className="h-1.5 w-1.5 rounded-full bg-[#cfa77a]" />
+              Cafe Recipe Roulette
+            </div>
+            <h1 className="mt-3 text-3xl font-semibold tracking-tight md:text-4xl">
+              世界の料理ルーレット <span className={C.muted}>☕</span>
+            </h1>
+            <p className={clsx("mt-2 max-w-2xl text-sm leading-relaxed", C.muted)}>
+              気分で選んで、ゆるく作って、うまかったら勝ち。
+            </p>
           </div>
 
-          <h3 className="mt-6 font-semibold">材料</h3>
-          <ul className="list-disc pl-6">
-            {recipe.ingredients.map((x) => (
-              <li key={x}>{x}</li>
-            ))}
-          </ul>
+          {/* Controls */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2">
+              <span className={clsx("text-xs", C.muted)}>地域</span>
+              <select
+                value={regionFilter}
+                onChange={(e) => refreshWithinFilter(e.target.value as any)}
+                className={clsx(
+                  "rounded-xl border px-3 py-2 text-sm outline-none",
+                  C.card,
+                  C.border,
+                  "focus:ring-2 focus:ring-[#d9b18a]/40"
+                )}
+              >
+                <option value="All">すべて</option>
+                <option value="Asia">アジア</option>
+                <option value="Europe">ヨーロッパ</option>
+                <option value="Americas">南北アメリカ</option>
+                <option value="Middle East">中東</option>
+                <option value="Africa">アフリカ</option>
+                <option value="Oceania">オセアニア</option>
+              </select>
+            </div>
 
-          <h3 className="mt-6 font-semibold">手順</h3>
-          <ol className="list-decimal pl-6">
-            {recipe.steps.map((x) => (
-              <li key={x}>{x}</li>
-            ))}
-          </ol>
+            <button onClick={nextRecipe} className={clsx("rounded-xl px-4 py-2 text-sm font-medium shadow-sm transition", C.btn)}>
+              次のレシピ
+            </button>
+            <button
+              onClick={copyText}
+              className={clsx("rounded-xl border px-4 py-2 text-sm transition", C.btnGhost)}
+            >
+              コピー
+            </button>
+          </div>
+        </div>
 
-          <button
-            onClick={() => setRecipe((prev) => pickRandom(filtered, prev))}
-            className="mt-6 bg-white text-black px-4 py-2 rounded"
-          >
-            次のレシピ
-          </button>
+        {/* Layout */}
+        <div className="mt-8 grid gap-6 lg:grid-cols-5">
+          {/* Hero Card */}
+          <div className="lg:col-span-3">
+            <div
+              className={clsx(
+                "overflow-hidden rounded-2xl border shadow-sm",
+                C.card,
+                C.border,
+                isShuffling && "opacity-80"
+              )}
+            >
+              {/* Image */}
+              <div className="relative">
+                <img
+                  src={recipe.imageUrl}
+                  alt={recipe.name}
+                  className="h-64 w-full object-cover md:h-72"
+                  loading="lazy"
+                />
+                {/* cafe overlay */}
+                <div className="absolute inset-0 bg-gradient-to-t from-[#3b2f2f]/70 via-[#3b2f2f]/20 to-transparent" />
+                <div className="absolute bottom-0 left-0 right-0 p-5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-2xl font-semibold tracking-tight md:text-3xl text-white">
+                      {recipe.name}
+                    </h2>
+                    <span className="rounded-full border border-white/25 bg-white/10 px-3 py-1 text-xs text-white">
+                      {recipe.country}
+                    </span>
+                    <span className="rounded-full border border-white/25 bg-white/10 px-3 py-1 text-xs text-white">
+                      {regionLabel(recipe.region)}
+                    </span>
+                  </div>
+
+                  <p className="mt-2 max-w-xl text-sm leading-relaxed text-white/90">
+                    {recipe.description}
+                  </p>
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <span className="rounded-full bg-white/15 px-3 py-1 text-xs text-white">
+                      ⏱ 約{recipe.timeMin}分
+                    </span>
+                    <span className="rounded-full bg-white/15 px-3 py-1 text-xs text-white">
+                      ✨ {difficultyLabel(recipe.difficulty)}
+                    </span>
+                    {recipe.tags.map((t) => (
+                      <span key={t} className="rounded-full border border-white/20 bg-black/10 px-3 py-1 text-xs text-white/95">
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer mini actions */}
+              <div className={clsx("flex flex-wrap items-center gap-3 border-t p-4", C.border)}>
+                <button onClick={nextRecipe} className={clsx("rounded-xl px-4 py-2 text-sm font-medium shadow-sm transition", C.btn)}>
+                  シャッフル
+                </button>
+                <button
+                  onClick={() => refreshWithinFilter(regionFilter)}
+                  className={clsx("rounded-xl border px-4 py-2 text-sm transition", C.btnGhost)}
+                >
+                  同じ条件でもう一回
+                </button>
+                <div className={clsx("ml-auto text-xs", C.muted)}>{filtered.length} recipes</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Ingredients + Steps */}
+          <div className="lg:col-span-2">
+            <div className={clsx("rounded-2xl border p-6 shadow-sm", C.card, C.border)}>
+              <h3 className="text-sm font-semibold">材料</h3>
+              <ul className={clsx("mt-3 space-y-2 text-sm", C.muted)}>
+                {recipe.ingredients.map((x) => (
+                  <li key={x} className="flex items-start gap-2">
+                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#cfa77a]" />
+                    <span className="leading-relaxed">{x}</span>
+                  </li>
+                ))}
+              </ul>
+
+              <div className={clsx("mt-6 border-t pt-5", C.border)}>
+                <h3 className="text-sm font-semibold">手順</h3>
+                <ol className={clsx("mt-3 space-y-3 text-sm", C.muted)}>
+                  {recipe.steps.map((x, i) => (
+                    <li key={x} className="flex gap-3">
+                      <span className={clsx("flex h-6 w-6 items-center justify-center rounded-lg border text-xs", C.border, "bg-[#faf6f1]")}>
+                        {i + 1}
+                      </span>
+                      <span className="leading-relaxed">{x}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            </div>
+
+            
+          </div>
         </div>
       </div>
     </main>
