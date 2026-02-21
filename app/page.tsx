@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { RECIPES, type Recipe } from "@/lib/recipes";
+import Link from "next/link";
+import { loadFavoriteIds, saveFavoriteIds, toggleFavoriteId } from "@/lib/favorites";
 
 function pickRandom<T>(arr: T[], exclude?: T) {
   if (arr.length === 0) throw new Error("empty array");
@@ -55,6 +57,34 @@ export default function Home() {
   // SSR安定 → 初回だけクライアントでランダム化
   const [recipe, setRecipe] = useState<Recipe>(() => filtered[0] ?? all[0]);
   const [isShuffling, setIsShuffling] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+useEffect(() => {
+  if (!toast) return;
+  const t = window.setTimeout(() => setToast(null), 1200);
+  return () => window.clearTimeout(t);
+}, [toast]);
+  // --- Favorites (localStorage) ---
+const FAV_KEY = "taste-daily:favorites:v1";
+const [favorites, setFavorites] = useState<string[]>([]);
+
+useEffect(() => {
+  setFavorites(loadFavoriteIds());
+}, []);
+
+useEffect(() => {
+  saveFavoriteIds(favorites);
+}, [favorites]);
+
+const isFavorite = useMemo(() => favorites.includes(recipe.id), [favorites, recipe.id]);
+
+const toggleFavorite = () => {
+  setFavorites((prev) => {
+    const wasFav = prev.includes(recipe.id);
+    const next = toggleFavoriteId(prev, recipe.id);
+    setToast(wasFav ? "お気に入りから外しました" : "お気に入りに追加しました");
+    return next;
+  });
+};
 
   useEffect(() => {
     setRecipe((prev) => pickRandom(filtered, prev));
@@ -75,17 +105,7 @@ export default function Home() {
     }, 140);
   };
 
-  const copyText = async () => {
-    const text =
-      `${recipe.name}（${recipe.country}）\n` +
-      `地域: ${regionLabel(recipe.region)} / 時間: 約${recipe.timeMin}分 / 難易度: ${difficultyLabel(
-        recipe.difficulty
-      )}\n\n` +
-      `【材料】\n- ${recipe.ingredients.join("\n- ")}\n\n` +
-      `【手順】\n1. ${recipe.steps.join("\n1. ")}`;
-    await navigator.clipboard.writeText(text);
-  };
-
+  
   // カフェ配色（1箇所でまとめ管理）
   const C = {
     bg: "bg-[#f6f1ea]",
@@ -100,20 +120,19 @@ export default function Home() {
 
   return (
     <main className={clsx("min-h-screen", C.bg, C.text)}>
-      <div className="mx-auto max-w-6xl px-6 py-12">
-        {/* Header */}
-        <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
+      <div className="mx-auto max-w-4xl px-6 py-12">
+        {/* Header（縦並び固定） */}
+        <div className="flex flex-col gap-4">
           <div>
-            
-            <h1 className="mt-3 text-3xl font-semibold tracking-tight md:text-4xl">
-              世界の料理ルーレット <span className={C.muted}>☕</span>
+            <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">
+              Taste Daily
             </h1>
             <p className={clsx("mt-2 max-w-2xl text-sm leading-relaxed", C.muted)}>
-              気分で選んで、ゆるく作って、うまかったら勝ち。
+              Discover what to cook today.
             </p>
           </div>
 
-          {/* Controls */}
+          {/* Controls（上は軽く：フィルター＋コピーだけ） */}
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2">
               <span className={clsx("text-xs", C.muted)}>地域</span>
@@ -136,23 +155,35 @@ export default function Home() {
                 <option value="Oceania">オセアニア</option>
               </select>
             </div>
-
-            <button onClick={nextRecipe} className={clsx("rounded-xl px-4 py-2 text-sm font-medium shadow-sm transition", C.btn)}>
-              次のレシピ
-            </button>
-            <button
-              onClick={copyText}
-              className={clsx("rounded-xl border px-4 py-2 text-sm transition", C.btnGhost)}
+            <Link
+              href="/favorites"
+              className={clsx(
+                "ml-auto inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm transition",
+                C.btnGhost
+              )}
             >
-              コピー
+              <span>♥ お気に入り</span>
+              {favorites.length > 0 && (
+                <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#6b4f4f] px-2 text-xs text-white">
+                  {favorites.length}
+                </span>
+              )}
+            </Link>
+
+            <button
+              onClick={toggleFavorite}
+              className={clsx("rounded-xl border px-4 py-2 text-sm transition", C.btnGhost)}
+              aria-pressed={isFavorite}
+            >
+              {isFavorite ? "♥ お気に入りに保存済み" : "♡ お気に入りに保存する"}
             </button>
           </div>
         </div>
 
-        {/* Layout */}
-        <div className="mt-8 grid gap-6 lg:grid-cols-5">
+        {/* Layout（常に縦並び） */}
+        <div className="mt-8 flex flex-col gap-6">
           {/* Hero Card */}
-          <div className="lg:col-span-3">
+          <div>
             <div
               className={clsx(
                 "overflow-hidden rounded-2xl border shadow-sm",
@@ -161,16 +192,14 @@ export default function Home() {
                 isShuffling && "opacity-80"
               )}
             >
-              {/* Image */}
               <div className="relative">
                 <img
                   src={recipe.imageUrl}
                   alt={recipe.name}
-                  className="h-64 w-full object-cover md:h-72"
+                  className="h-64 w-full object-cover md:h-80"
                   loading="lazy"
                 />
-                {/* cafe overlay */}
-                <div className="absolute inset-0 bg-gradient-to-t from-[#3b2f2f]/90 via-[#3b2f2f]/45 to-transparent lg:from-[#3b2f2f]/70 lg:via-[#3b2f2f]/20" />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#3b2f2f]/90 via-[#3b2f2f]/45 to-transparent md:from-[#3b2f2f]/75 md:via-[#3b2f2f]/25" />
                 <div className="absolute bottom-0 left-0 right-0 p-5">
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="text-2xl font-semibold tracking-tight md:text-3xl text-white">
@@ -196,7 +225,10 @@ export default function Home() {
                       ✨ {difficultyLabel(recipe.difficulty)}
                     </span>
                     {recipe.tags.map((t) => (
-                      <span key={t} className="rounded-full border border-white/20 bg-black/10 px-3 py-1 text-xs text-white/95">
+                      <span
+                        key={t}
+                        className="rounded-full border border-white/20 bg-black/10 px-3 py-1 text-xs text-white/95"
+                      >
                         {t}
                       </span>
                     ))}
@@ -204,50 +236,60 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Footer mini actions */}
-              <div className={clsx("flex flex-wrap items-center gap-3 border-t p-4", C.border)}>
-                <button onClick={nextRecipe} className={clsx("w-full sm:w-auto rounded-xl px-5 py-3 text-sm font-medium shadow-sm transition", C.btn)}>
+              {/* Footer：ボタンはここだけ（1つに統一） */}
+              <div className={clsx("flex items-center gap-3 border-t p-4", C.border)}>
+                <button
+                  onClick={nextRecipe}
+                  className={clsx("w-full sm:w-auto rounded-xl px-5 py-3 text-sm font-medium shadow-sm transition", C.btn)}
+                >
                   次のレシピ
                 </button>
-                
-                
                 <div className={clsx("ml-auto text-xs", C.muted)}>{filtered.length} recipes</div>
               </div>
             </div>
           </div>
 
-          {/* Ingredients + Steps */}
-          <div className="lg:col-span-2">
-            <div className={clsx("rounded-2xl border p-6 shadow-sm", C.card, C.border)}>
-              <h3 className="text-sm font-semibold">材料</h3>
-              <ul className={clsx("mt-3 space-y-2 text-sm", C.muted)}>
-                {recipe.ingredients.map((x) => (
-                  <li key={x} className="flex items-start gap-2">
-                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#cfa77a]" />
+          {/* Ingredients + Steps（カードは分けて縦並び） */}
+          <div className={clsx("rounded-2xl border p-6 shadow-sm", C.card, C.border)}>
+            <h3 className="text-sm font-semibold">材料</h3>
+            <ul className={clsx("mt-3 space-y-2 text-sm", C.muted)}>
+              {recipe.ingredients.map((x) => (
+                <li key={x} className="flex items-start gap-2">
+                  <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#cfa77a]" />
+                  <span className="leading-relaxed">{x}</span>
+                </li>
+              ))}
+            </ul>
+
+            <div className={clsx("mt-6 border-t pt-5", C.border)}>
+              <h3 className="text-sm font-semibold">手順</h3>
+              <ol className={clsx("mt-3 space-y-3 text-sm", C.muted)}>
+                {recipe.steps.map((x, i) => (
+                  <li key={x} className="flex gap-3">
+                    <span
+                      className={clsx(
+                        "flex h-6 w-6 items-center justify-center rounded-lg border text-xs",
+                        C.border,
+                        "bg-[#faf6f1]"
+                      )}
+                    >
+                      {i + 1}
+                    </span>
                     <span className="leading-relaxed">{x}</span>
                   </li>
                 ))}
-              </ul>
-
-              <div className={clsx("mt-6 border-t pt-5", C.border)}>
-                <h3 className="text-sm font-semibold">手順</h3>
-                <ol className={clsx("mt-3 space-y-3 text-sm", C.muted)}>
-                  {recipe.steps.map((x, i) => (
-                    <li key={x} className="flex gap-3">
-                      <span className={clsx("flex h-6 w-6 items-center justify-center rounded-lg border text-xs", C.border, "bg-[#faf6f1]")}>
-                        {i + 1}
-                      </span>
-                      <span className="leading-relaxed">{x}</span>
-                    </li>
-                  ))}
-                </ol>
-              </div>
+              </ol>
             </div>
-
-            
           </div>
         </div>
       </div>
+    {toast && (
+  <div className="fixed bottom-5 right-5 z-50">
+    <div className={clsx("rounded-xl border px-4 py-3 text-sm shadow-sm", C.card, C.border)}>
+      {toast}
+    </div>
+  </div>
+)}
     </main>
   );
 }
