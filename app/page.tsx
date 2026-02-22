@@ -68,6 +68,7 @@ useEffect(() => {
 }, [toast]);
   // --- Favorites (localStorage) ---
 const [favorites, setFavorites] = useState<string[]>([]);
+const [favReady, setFavReady] = useState(false);
 
 useEffect(() => {
   if (!requestedId) return;
@@ -81,11 +82,13 @@ useEffect(() => {
 
 useEffect(() => {
   setFavorites(loadFavoriteIds());
+  setFavReady(true);
 }, []);
 
 useEffect(() => {
+  if (!favReady) return; // ★読み込み前の空配列で上書きしない
   saveFavoriteIds(favorites);
-}, [favorites]);
+}, [favorites, favReady]);
 
 const isFavorite = useMemo(() => favorites.includes(recipe.id), [favorites, recipe.id]);
 
