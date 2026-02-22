@@ -49,7 +49,8 @@ function clsx(...xs: Array<string | false | undefined | null>) {
 export default function Home() {
   const searchParams = useSearchParams();
   const requestedId = searchParams.get("id");
-  const all = useMemo(() => RECIPES, []);
+  const [userRecipes, setUserRecipes] = useState<any[]>([]);
+  const all = useMemo(() => [...RECIPES, ...userRecipes], [userRecipes]);
   const [regionFilter, setRegionFilter] = useState<Recipe["region"] | "All">("All");
 
   const filtered = useMemo(
@@ -77,8 +78,7 @@ useEffect(() => {
   if (found) {
     setRecipe(found);
   }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [requestedId]);
+}, [requestedId, all]);
 
 useEffect(() => {
   setFavorites(loadFavoriteIds());
@@ -89,6 +89,21 @@ useEffect(() => {
   if (!favReady) return; // ★読み込み前の空配列で上書きしない
   saveFavoriteIds(favorites);
 }, [favorites, favReady]);
+
+// 投稿レシピを読み込む（初回だけ）
+useEffect(() => {
+  (async () => {
+    try {
+      const res = await fetch("/api/recipes");
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data)) setUserRecipes(data);
+    } catch {
+      // ignore
+    }
+  })();
+}, []);
+
 
 const isFavorite = useMemo(() => favorites.includes(recipe.id), [favorites, recipe.id]);
 
